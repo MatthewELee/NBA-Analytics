@@ -1,4 +1,4 @@
-<script setup lang="ts" generic="Row extends Record<string, string | number>">
+<script setup lang="ts" generic="Row extends Record<string, any>">
 export interface Column {
   key: string
   label: string
@@ -7,6 +7,8 @@ export interface Column {
   numeric?: boolean
   decimals?: number
   sortable?: boolean
+  /** Custom text for a cell. For markup, use the `cell-<key>` slot instead. */
+  format?: (value: any, row: any) => string
 }
 
 const props = withDefaults(
@@ -17,8 +19,9 @@ const props = withDefaults(
     /** Row key used to highlight one row in the spot color. */
     highlight?: (row: Row) => boolean
     initialSort?: { key: string; dir: 'asc' | 'desc' }
+    rowKey?: (row: Row, index: number) => string | number
   }>(),
-  { highlight: () => false, initialSort: undefined },
+  { highlight: () => false, initialSort: undefined, rowKey: (_: Row, i: number) => i },
 )
 
 const sortKey = ref(props.initialSort?.key ?? '')
@@ -51,9 +54,12 @@ function ariaSort(col: Column) {
   return sortDir.value === 'asc' ? 'ascending' : 'descending'
 }
 
-function format(col: Column, v: string | number | undefined) {
+function format(col: Column, row: Row) {
+  const v = row[col.key]
+  if (col.format) return col.format(v, row)
+  if (v === null || v === undefined) return '–'
   if (typeof v === 'number' && col.decimals !== undefined) return v.toFixed(col.decimals)
-  return v ?? ''
+  return v
 }
 
 const root = ref<HTMLElement | null>(null)
@@ -86,9 +92,9 @@ useReveal(root, 30)
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(row, i) in sorted" :key="i" class="reveal" :class="{ 'is-highlight': highlight(row) }">
+        <tr v-for="(row, i) in sorted" :key="rowKey(row, i)" class="reveal" :class="{ 'is-highlight': highlight(row) }">
           <td v-for="col in columns" :key="col.key" :class="{ num: col.numeric }">
-            {{ format(col, row[col.key]) }}
+            <slot :name="`cell-${col.key}`" :row="row" :value="row[col.key]">{{ format(col, row) }}</slot>
           </td>
         </tr>
       </tbody>

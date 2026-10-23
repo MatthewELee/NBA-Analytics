@@ -2,31 +2,44 @@ import type { Ref } from 'vue'
 
 /**
  * Adds `.is-in` to every `.reveal` child of `root` the first time it scrolls into view,
- * staggered by `step` ms. With reduced motion the CSS shows everything immediately.
+ * staggered by `step` ms. Rows added later (filters, new data) are picked up on update.
+ * With reduced motion the CSS shows everything immediately.
  */
 export function useReveal(root: Ref<HTMLElement | null>, step = 40) {
-  onMounted(() => {
+  let io: IntersectionObserver | null = null
+  const seen = new WeakSet<Element>()
+
+  function scan() {
     const el = root.value
     if (!el) return
-    const items = Array.from(el.querySelectorAll<HTMLElement>('.reveal'))
-    if (!('IntersectionObserver' in window)) {
-      items.forEach((i) => i.classList.add('is-in'))
+    const fresh = Array.from(el.querySelectorAll<HTMLElement>('.reveal')).filter((i) => !seen.has(i))
+    if (!fresh.length) return
+    if (!io) {
+      fresh.forEach((i) => i.classList.add('is-in'))
       return
     }
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return
-          const target = entry.target as HTMLElement
-          const index = items.indexOf(target)
-          target.style.transitionDelay = `${Math.min(index, 12) * step}ms`
-          target.classList.add('is-in')
-          io.unobserve(target)
-        })
-      },
-      { rootMargin: '0px 0px -10% 0px' },
-    )
-    items.forEach((i) => io.observe(i))
-    onBeforeUnmount(() => io.disconnect())
+    fresh.forEach((item, index) => {
+      seen.add(item)
+      item.style.transitionDelay = `${Math.min(index, 12) * step}ms`
+      io!.observe(item)
+    })
+  }
+
+  onMounted(() => {
+    if ('IntersectionObserver' in window) {
+      io = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return
+            entry.target.classList.add('is-in')
+            io?.unobserve(entry.target)
+          })
+        },
+        { rootMargin: '0px 0px -10% 0px' },
+      )
+    }
+    scan()
   })
+  onUpdated(() => nextTick(scan))
+  onBeforeUnmount(() => io?.disconnect())
 }

@@ -52,7 +52,7 @@ def run_step(tasks: Tasks, step: str, args) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    commands = sorted({*GROUPS, "migrate", "backfill", "bdl-games", *(s for g in GROUPS.values() for s in g)})
+    commands = sorted({*GROUPS, "migrate", "backfill", "bdl-games", "demo", *(s for g in GROUPS.values() for s in g)})
     p = argparse.ArgumentParser(prog="bk_ingest", description="Load NBA data into the Baller Knowledge database.")
     p.add_argument("command", choices=commands)
     p.add_argument("--season", default=current_season(), help="NBA season label, e.g. 2026-27 (default: current)")
@@ -61,6 +61,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--first-season", default="1996-97", help="backfill: first season to load")
     p.add_argument("--date", help="scoreboard: ET date, YYYY-MM-DD")
     p.add_argument("--limit", type=int, help="awards: only the first N active players")
+    p.add_argument("--confirm-demo", action="store_true",
+                   help="demo: required, since demo data is fictional and must not reach production")
     p.add_argument("-v", "--verbose", action="store_true")
     args = p.parse_args(argv)
 
@@ -72,6 +74,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "migrate":
         applied = migrate(conn)
         log.info("applied %s", applied or "nothing (up to date)")
+        return 0
+
+    if args.command == "demo":
+        if not args.confirm_demo:
+            raise SystemExit("demo writes fictional players and games. Re-run with --confirm-demo on a dev database.")
+        from .demo import seed
+
+        log.info("seeded demo data: %s", seed(conn, today_eastern()))
         return 0
 
     tasks = Tasks(conn, settings)

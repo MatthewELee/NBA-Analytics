@@ -15,6 +15,8 @@ npm run typecheck
 
 Server routes read from Postgres. Copy `.env.example` to `.env` and set `NUXT_DATABASE_URL`; the data is loaded by the Python job in [`ingest/`](./ingest/README.md).
 
+No database access to the live sources? `python -m bk_ingest demo --confirm-demo` (from `ingest/`) fills a dev database with fictional players and games, labelled as demo data on every page.
+
 The house style lives at [`/styleguide`](http://localhost:3000/styleguide). All colors, type sizes and rules are tokens in `assets/styles/tokens.css`.
 
 ## Deploy (Cloudflare Pages)
@@ -31,7 +33,7 @@ To try a production build locally: `NITRO_PRESET=cloudflare_pages npm run build`
 
 - [x] Step 1: foundation, tokens, fonts, Day and Night editions, styleguide
 - [x] Step 2: ingest job, Postgres schema, server routes
-- [ ] Step 3: player, team and compare pages
+- [x] Step 3: player, team and compare pages
 - [ ] Step 4: home, the Ledger, search, deploy
 
 ## API
