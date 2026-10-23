@@ -10,7 +10,7 @@ An NBA analytics site and portfolio piece. People come here to look up players, 
 1. **Foundation.** Clear out the old starter and set up a fresh Nuxt 3 + TypeScript project at the repo root. Add the design tokens, fonts, both editions (light and dark), and a `/styleguide` page that shows type, color, rules, a table, and a chart, so the look is approved before any feature work.
 2. **Data.** Write the Python ingest job in `ingest/` (nba_api, with balldontlie as a fallback, and ESPN for news, awards, and the scoreboard), set up the Postgres schema, schedule the job, and add Nuxt server routes that serve player, team, and news data.
 3. **Core pages.** Build the player page, the team page, and Compare.
-4. **Home, the Ledger, and launch.** Build the milestone detection, the Ledger feed, the Home page, and global search, then deploy.
+4. **Home, the Ledger, and launch.** Build the milestone detection, the Ledger feed, the Home page, and global search, then deploy to Cloudflare.
 
 ## Site content
 
@@ -87,9 +87,9 @@ An NBA analytics site and portfolio piece. People come here to look up players, 
   - Stats come from the `nba_api` Python package (it wraps stats.nba.com) or the balldontlie API. stats.nba.com often blocks cloud IP addresses, so the site never calls it live. A scheduled ingest job pulls the data and writes it to the database.
   - News, awards, and the scoreboard come from ESPN's public site API (`site.api.espn.com/apis/site/v2/sports/basketball/nba/...`), which has news and scoreboard endpoints.
   - Ledger milestones are computed by our own ingest job, by checking career totals against round-number thresholds and known records.
-- **Storage:** Postgres hosted on Neon or Supabase (free tier). Nuxt server routes read from it and cache responses.
+- **Storage:** Postgres hosted on Neon or Supabase (free tier). Nuxt server routes read from it and cache responses. The app runs on Cloudflare Workers, so server routes connect through Cloudflare Hyperdrive or a Workers-compatible driver (for example `@neondatabase/serverless`), not a long-lived TCP pool.
 - **Ingest:** a Python script in `ingest/`, run on a schedule (GitHub Actions cron or a small worker).
-- **Hosting:** Vercel or Netlify for the Nuxt app.
+- **Hosting:** Cloudflare (Workers or Pages) for the Nuxt app, built with Nitro's Cloudflare preset. Not Vercel: the old Vercel project linked to the repo can be disconnected.
 
 ## Conventions
 - Keep design tokens in `assets/styles/tokens.css`. Never hard-code colors or font sizes in components.
