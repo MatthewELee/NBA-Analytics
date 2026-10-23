@@ -54,9 +54,10 @@ const x = computed(() => {
 const y = computed(() => {
   const lo = min(all.value, (p) => p.y) ?? 0
   const hi = max(all.value, (p) => p.y) ?? 1
-  const pad = (hi - lo) * 0.08
+  const pad = (hi - lo) * 0.08 || 1
+  // Stats that can't go negative floor at zero; differentials and ratings keep their sign.
   return scaleLinear()
-    .domain([Math.max(0, lo - pad), hi + pad])
+    .domain([lo >= 0 ? Math.max(0, lo - pad) : lo - pad, hi + pad])
     .nice(5)
     .range([innerH.value, 0])
 })
@@ -136,8 +137,9 @@ const tableId = useId()
             <text x="-8" dy="0.32em" text-anchor="end">{{ t }}</text>
           </g>
         </g>
-        <!-- baseline -->
+        <!-- baseline, and a zero line when values cross zero -->
         <line class="baseline" :y1="innerH" :y2="innerH" :x2="innerW" />
+        <line v-if="y.domain()[0]! < 0" class="baseline" :y1="y(0)" :y2="y(0)" :x2="innerW" />
         <g class="axis axis--x" :transform="`translate(0,${innerH})`">
           <g v-for="t in xTicks" :key="t" :transform="`translate(${x(t)},0)`">
             <line class="tick" y2="5" />

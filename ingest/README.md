@@ -24,6 +24,7 @@ python -m bk_ingest live                     # ESPN scoreboard for yesterday and
 python -m bk_ingest news
 python -m bk_ingest awards                   # one call per active player, about 10 minutes
 python -m bk_ingest gamelogs --season 2025-26
+python -m bk_ingest demo --confirm-demo      # dev only: fictional players and games for building pages
 ```
 
 Each task is logged in `ingest_runs`; the site uses the newest successful run as the
