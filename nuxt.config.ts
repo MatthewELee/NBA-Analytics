@@ -4,6 +4,11 @@ export default defineNuxtConfig({
   devtools: { enabled: false },
   typescript: { strict: true },
 
+  runtimeConfig: {
+    // Set with NUXT_DATABASE_URL. On Cloudflare, a Hyperdrive binding named HYPERDRIVE wins.
+    databaseUrl: '',
+  },
+
   css: [
     '@fontsource/big-shoulders-display/700',
     '@fontsource/big-shoulders-display/900',

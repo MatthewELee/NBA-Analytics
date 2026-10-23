@@ -1,0 +1,68 @@
+name: Ingest
+
+# Pulls NBA data into Postgres. Needs the DATABASE_URL repository secret.
+# Optional secrets: NBA_API_PROXY (stats.nba.com often blocks GitHub's runners),
+# BALLDONTLIE_API_KEY (fallback for games when stats.nba.com is unreachable).
+
+on:
+  schedule:
+    - cron: "*/15 0-6,23 * * *" # live: scores every 15 min during game hours (7pm-3am ET)
+    - cron: "5 * * * *"         # hourly: news and scores
+    - cron: "30 10 * * *"       # daily: teams, players, standings, season stats, game logs, schedule
+    - cron: "0 12 * * 1"        # weekly: awards
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "bk_ingest command (daily, live, hourly, weekly, migrate, backfill, or a single task)"
+        required: true
+        default: daily
+      args:
+        description: "Extra arguments, e.g. --season 2025-26"
+        required: false
+        default: ""
+
+concurrency:
+  group: ingest-${{ github.event.schedule || inputs.command }}
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: ingest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ingest/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Pick command
+        id: pick
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+          INPUT_COMMAND: ${{ inputs.command }}
+        run: |
+          case "$SCHEDULE" in
+            "*/15 0-6,23 * * *") cmd=live ;;
+            "5 * * * *")         cmd=hourly ;;
+            "30 10 * * *")       cmd=daily ;;
+            "0 12 * * 1")        cmd=weekly ;;
+            *)                   cmd="$INPUT_COMMAND" ;;
+          esac
+          echo "command=$cmd" >> "$GITHUB_OUTPUT"
+      - name: Migrate
+        run: python -m bk_ingest migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Run ${{ steps.pick.outputs.command }}
+        run: python -m bk_ingest "$COMMAND" $ARGS
+        env:
+          COMMAND: ${{ steps.pick.outputs.command }}
+          ARGS: ${{ inputs.args }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NBA_API_PROXY: ${{ secrets.NBA_API_PROXY }}
+          BALLDONTLIE_API_KEY: ${{ secrets.BALLDONTLIE_API_KEY }}
