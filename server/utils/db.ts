@@ -4,9 +4,9 @@ import type { H3Event } from 'h3'
 /*
  * Postgres access for server routes.
  *
- * On Cloudflare Workers the connection string comes from a Hyperdrive binding named
- * HYPERDRIVE, and each request opens (and closes) its own small client; Hyperdrive pools
- * the real connections. Everywhere else (local dev, Node) one client is shared and the
+ * On Cloudflare (Pages or Workers) the connection string comes from a Hyperdrive binding
+ * named HYPERDRIVE, and each request opens (and closes) its own small client; Hyperdrive
+ * pools the real connections. Everywhere else (local dev, Node) one client is shared and the
  * URL comes from NUXT_DATABASE_URL.
  */
 
@@ -35,9 +35,11 @@ export function useDb(event: H3Event): Sql {
   const env = (event.context as { cloudflare?: { env?: Record<string, unknown> } }).cloudflare?.env
   const hyperdrive = env?.HYPERDRIVE as HyperdriveBinding | undefined
   if (hyperdrive?.connectionString) {
-    const sql = postgres(hyperdrive.connectionString, { ...options, max: 5 }) as unknown as Sql
-    event.waitUntil(sql.end())
-    return sql
+    // One client per request, shared by every query in it. server/plugins/db.ts closes it
+    // once the response is sent.
+    const ctx = event.context as { db?: Sql }
+    ctx.db ??= postgres(hyperdrive.connectionString, { ...options, max: 5 }) as unknown as Sql
+    return ctx.db
   }
 
   const url = useRuntimeConfig(event).databaseUrl
