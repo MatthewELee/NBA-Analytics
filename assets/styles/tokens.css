@@ -1,0 +1,153 @@
+/*
+ * Baller Knowledge design tokens.
+ * Every color, font, size and rule in the app comes from here.
+ * Components never hard-code these values.
+ *
+ * Two editions:
+ *   Day edition   newsprint paper, black ink (default)
+ *   Night edition near-black paper, bone ink
+ * The edition follows the reader's system setting until they pick one,
+ * after which <html data-edition="day|night"> wins.
+ */
+
+:root {
+  /* ---- Palette: raw values ------------------------------------------- */
+  --newsprint: #f2eee3;
+  --newsprint-deep: #e7e1d1;
+  --ink-black: #141414;
+  --ink-grey: #5e5a50;
+  --ink-faint: #c9c3b3;
+  --hardwood: #d9531e;
+  --hardwood-deep: #a83e12;
+  --slate: #4a6274;
+
+  --night-paper: #121212;
+  --night-paper-raised: #1c1b19;
+  --bone: #e9e4d8;
+  --bone-grey: #9a958a;
+  --bone-faint: #3a3833;
+  --hardwood-night: #e2622e;
+  --slate-night: #8fa3b3;
+
+  /* ---- Semantic colors (Day edition) --------------------------------- */
+  --color-paper: var(--newsprint);
+  --color-paper-alt: var(--newsprint-deep);
+  --color-ink: var(--ink-black);
+  --color-ink-muted: var(--ink-grey);
+  --color-rule: var(--ink-black);
+  --color-rule-faint: var(--ink-faint);
+  /* Spot color. Use --color-spot for large type, fills and chart marks.
+     Use --color-spot-text for small text, which needs the darker value for AA. */
+  --color-spot: var(--hardwood);
+  --color-spot-text: var(--hardwood-deep);
+  --color-on-spot: var(--ink-black);
+  --color-secondary: var(--slate);
+  --color-focus: var(--hardwood-deep);
+  --texture-opacity: 0.05;
+
+  color-scheme: light;
+
+  /* ---- Type families ------------------------------------------------- */
+  --font-display: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
+  --font-body: 'Newsreader Variable', Georgia, serif;
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+
+  /* ---- Type scale (fluid). Display sizes run big on purpose. -------- */
+  --text-2xs: 0.6875rem;  /* 11px  mono captions, axis ticks */
+  --text-xs: 0.75rem;     /* 12px  mono labels */
+  --text-sm: 0.875rem;    /* 14px  table cells */
+  --text-base: 1.0625rem; /* 17px  body */
+  --text-lg: 1.25rem;     /* 20px  lede */
+  --text-xl: clamp(1.5rem, 1.2rem + 1.2vw, 2rem);
+  --text-2xl: clamp(2rem, 1.4rem + 2.6vw, 3.25rem);
+  --text-3xl: clamp(2.75rem, 1.6rem + 5vw, 5.5rem);
+  --text-4xl: clamp(3.5rem, 1.6rem + 9vw, 9rem);
+  --text-mega: clamp(5rem, 2rem + 16vw, 16rem);
+
+  --leading-tight: 0.86;
+  --leading-snug: 1.15;
+  --leading-body: 1.5;
+
+  --tracking-display: -0.01em;
+  --tracking-caps: 0.08em;
+
+  --weight-display: 900;
+  --weight-display-light: 700;
+
+  /* ---- Space (4px base) ---------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+  --space-9: 6rem;
+
+  /* ---- Grid ---------------------------------------------------------- */
+  --grid-columns: 12;
+  --grid-gutter: clamp(1rem, 0.6rem + 1.5vw, 2rem);
+  --page-margin: clamp(1rem, 0.2rem + 4vw, 4.5rem);
+  --page-max: 1440px;
+  --measure: 62ch;
+
+  /* ---- Rules --------------------------------------------------------- */
+  --rule-hair: 1px;
+  --rule-heavy: 3px;
+  --rule-double: 4px; /* two hairlines with a 2px gap */
+  --radius: 0; /* square corners. nearly square at most: */
+  --radius-nub: 2px;
+
+  /* ---- Motion -------------------------------------------------------- */
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --duration-fast: 120ms;
+  --duration-base: 240ms;
+  --duration-slow: 600ms;
+  --duration-count: 900ms;
+}
+
+/* Night edition, from the system setting when the reader has not chosen. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-edition='day']) {
+    --color-paper: var(--night-paper);
+    --color-paper-alt: var(--night-paper-raised);
+    --color-ink: var(--bone);
+    --color-ink-muted: var(--bone-grey);
+    --color-rule: var(--bone);
+    --color-rule-faint: var(--bone-faint);
+    --color-spot: var(--hardwood-night);
+    --color-spot-text: var(--hardwood-night);
+    --color-on-spot: var(--night-paper);
+    --color-secondary: var(--slate-night);
+    --color-focus: var(--hardwood-night);
+    --texture-opacity: 0.05;
+    color-scheme: dark;
+  }
+}
+
+/* Night edition, chosen explicitly. */
+:root[data-edition='night'] {
+  --color-paper: var(--night-paper);
+  --color-paper-alt: var(--night-paper-raised);
+  --color-ink: var(--bone);
+  --color-ink-muted: var(--bone-grey);
+  --color-rule: var(--bone);
+  --color-rule-faint: var(--bone-faint);
+  --color-spot: var(--hardwood-night);
+  --color-spot-text: var(--hardwood-night);
+  --color-on-spot: var(--night-paper);
+  --color-secondary: var(--slate-night);
+  --color-focus: var(--hardwood-night);
+  --texture-opacity: 0.05;
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+    --duration-count: 0ms;
+  }
+}
