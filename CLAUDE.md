@@ -87,9 +87,9 @@ An NBA analytics site and portfolio piece. People come here to look up players, 
   - Stats come from the `nba_api` Python package (it wraps stats.nba.com) or the balldontlie API. stats.nba.com often blocks cloud IP addresses, so the site never calls it live. A scheduled ingest job pulls the data and writes it to the database.
   - News, awards, and the scoreboard come from ESPN's public site API (`site.api.espn.com/apis/site/v2/sports/basketball/nba/...`), which has news and scoreboard endpoints.
   - Ledger milestones are computed by our own ingest job, by checking career totals against round-number thresholds and known records.
-- **Storage:** Postgres hosted on Neon or Supabase (free tier). Nuxt server routes read from it and cache responses. The app runs on Cloudflare Workers, so server routes connect through Cloudflare Hyperdrive or a Workers-compatible driver (for example `@neondatabase/serverless`), not a long-lived TCP pool.
+- **Storage:** Postgres hosted on Neon or Supabase (free tier). Nuxt server routes read from it and cache responses. On Cloudflare, server routes connect through Hyperdrive with postgres.js, opening one small client per request (`server/utils/db.ts`, closed in `server/plugins/db.ts`).
 - **Ingest:** a Python script in `ingest/`, run on a schedule (GitHub Actions cron or a small worker).
-- **Hosting:** Cloudflare (Workers or Pages) for the Nuxt app, built with Nitro's Cloudflare preset. Not Vercel: the old Vercel project linked to the repo can be disconnected.
+- **Hosting:** Cloudflare Pages, connected to the repo. Nitro detects the Pages build and uses its `cloudflare-pages` preset (build command `npm run build`, output directory `dist`). The Pages project needs the `nodejs_compat` compatibility flag and a Hyperdrive binding named `HYPERDRIVE` for Postgres. Not Vercel: the old Vercel project linked to the repo can be disconnected.
 
 ## Conventions
 - Keep design tokens in `assets/styles/tokens.css`. Never hard-code colors or font sizes in components.

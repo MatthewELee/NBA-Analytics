@@ -17,6 +17,16 @@ Server routes read from Postgres. Copy `.env.example` to `.env` and set `NUXT_DA
 
 The house style lives at [`/styleguide`](http://localhost:3000/styleguide). All colors, type sizes and rules are tokens in `assets/styles/tokens.css`.
 
+## Deploy (Cloudflare Pages)
+
+The repo is connected to a Cloudflare Pages project.
+
+- **Build settings:** framework preset Nuxt.js, build command `npm run build`, output directory `dist`. Node comes from `.node-version`.
+- **Runtime:** add the `nodejs_compat` compatibility flag (Settings → Runtime) for production and preview.
+- **Database:** create a Hyperdrive configuration pointing at the Postgres database, then add a Hyperdrive binding named `HYPERDRIVE` (Settings → Bindings).
+
+To try a production build locally: `NITRO_PRESET=cloudflare_pages npm run build`, then `npx wrangler pages dev dist`.
+
 ## Status
 
 - [x] Step 1: foundation, tokens, fonts, Day and Night editions, styleguide
