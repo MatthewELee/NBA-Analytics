@@ -43,6 +43,8 @@
   --color-on-spot: var(--ink-black);
   --color-secondary: var(--slate);
   --color-focus: var(--hardwood-deep);
+  /* Flat dimming behind the search dialog. */
+  --color-scrim: rgb(20 20 20 / 0.55);
   --texture-opacity: 0.05;
 
   color-scheme: light;
@@ -121,6 +123,7 @@
     --color-on-spot: var(--night-paper);
     --color-secondary: var(--slate-night);
     --color-focus: var(--hardwood-night);
+    --color-scrim: rgb(0 0 0 / 0.72);
     --texture-opacity: 0.05;
     color-scheme: dark;
   }
@@ -139,6 +142,7 @@
   --color-on-spot: var(--night-paper);
   --color-secondary: var(--slate-night);
   --color-focus: var(--hardwood-night);
+  --color-scrim: rgb(0 0 0 / 0.72);
   --texture-opacity: 0.05;
   color-scheme: dark;
 }

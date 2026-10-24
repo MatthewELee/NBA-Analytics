@@ -5,7 +5,7 @@ import type { ApiResponse, GameLogRow, PlayerDetail, SeasonLine } from '~/types/
 
 const route = useRoute()
 const slug = computed(() => String(route.params.slug))
-const season = computed(() => (typeof route.query.season === 'string' ? route.query.season : undefined))
+const season = useSeason()
 
 const { data: player, error } = await useFetch<ApiResponse<PlayerDetail>>(() => `/api/players/${slug.value}`, {
   query: { season },
@@ -220,7 +220,9 @@ const accolades = computed(() => groupAccolades(p.value.awards))
       </div>
 
       <!-- News rail -->
-      <aside class="body__rail" aria-labelledby="news-title">
+      <aside class="body__rail" aria-label="Ledger and news">
+        <LedgerRail :player="p.slug" heading-id="player-ledger-title" />
+        <section aria-labelledby="news-title" class="rail__news">
         <SectionHead id="news-title" title="In the news" kicker="ESPN" />
         <ol v-if="p.news.length" class="news">
           <li v-for="n in p.news" :key="n.id">
@@ -229,7 +231,7 @@ const accolades = computed(() => groupAccolades(p.value.awards))
           </li>
         </ol>
         <EmptyNote v-else>No recent stories.</EmptyNote>
-        <p class="rail__note label">The Ledger of records and milestones will run here.</p>
+        </section>
       </aside>
     </div>
   </article>
@@ -353,8 +355,6 @@ const accolades = computed(() => groupAccolades(p.value.awards))
 .body__rail {
   grid-column: 9 / -1;
   align-self: start;
-  position: sticky;
-  top: var(--space-4);
 }
 
 .accolades {
@@ -419,8 +419,8 @@ const accolades = computed(() => groupAccolades(p.value.awards))
   text-decoration-color: var(--color-spot);
 }
 
-.rail__note {
-  margin-top: var(--space-5);
+.rail__news {
+  margin-top: var(--space-7);
 }
 
 @media (max-width: 960px) {

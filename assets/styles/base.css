@@ -241,3 +241,8 @@ a:hover {
     transform: none;
   }
 }
+
+/* The browser's own clear button on search fields is off-palette; Escape clears instead. */
+input[type='search']::-webkit-search-cancel-button {
+  appearance: none;
+}
