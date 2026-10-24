@@ -19,24 +19,24 @@ No database access to the live sources? `python -m bk_ingest demo --confirm-demo
 
 The house style lives at [`/styleguide`](http://localhost:3000/styleguide). All colors, type sizes and rules are tokens in `assets/styles/tokens.css`.
 
-## Deploy (Cloudflare Pages)
+## Deploy (Cloudflare Workers)
 
-The repo is connected to a Cloudflare Pages project.
+The repo is connected to a Cloudflare Worker named `ball-knowledge` (Workers Builds), live at https://ball-knowledge.matt-e-lee.workers.dev.
 
-- **Build settings:** framework preset Nuxt.js, build command `npm run build`, output directory `dist`. Node comes from `.node-version`.
-- **Runtime:** add the `nodejs_compat` compatibility flag (Settings → Runtime) for production and preview.
-- **Database:** create a Hyperdrive configuration pointing at the Postgres database, then add a Hyperdrive binding named `HYPERDRIVE` (Settings → Bindings).
+- **Build settings:** build command `npm run build`, deploy command `npx wrangler deploy`, root directory `/`. Node comes from `.node-version`.
+- **Config:** `wrangler.jsonc` holds the Worker name, the `nodejs_compat` flag and the bindings. Nitro detects the Workers build, uses its `cloudflare-module` preset, and writes the merged config to `.output/server/wrangler.json` (adding `no_nodejs_compat_v2` on purpose). Add bindings in `wrangler.jsonc`, not the dashboard: every deploy replaces the dashboard's bindings with the file's.
+- **Database:** the Hyperdrive configuration for the Neon database is bound as `HYPERDRIVE` in `wrangler.jsonc`.
 
 ### Going live with real data
 
 1. Create a free Postgres database (Neon or Supabase) and copy its connection string.
 2. In GitHub, add it as the repository secret `DATABASE_URL` (Settings → Secrets and variables → Actions).
 3. Run the **Ingest** workflow by hand (Actions → Ingest → Run workflow): `backfill` first (every player and every season since 1996-97; it runs the schema migrations too), then `daily`, then `weekly` for awards. After that the schedule keeps it current.
-4. In Cloudflare, create a Hyperdrive configuration with the same connection string and bind it to the Pages project as `HYPERDRIVE`.
+4. In Cloudflare, create a Hyperdrive configuration with the same connection string and put its id in `wrangler.jsonc` under the `HYPERDRIVE` binding (already done for the live site).
 
 Stats come from stats.nba.com through `nba_api` (no key). NBA.com sometimes blocks cloud servers, GitHub's runners included: if the stats steps fail with timeouts, set an `NBA_API_PROXY` secret, or run `python -m bk_ingest daily` from your own machine with `DATABASE_URL` set. Scores and news come from ESPN's public API (no key). A `BALLDONTLIE_API_KEY` secret is optional and only used as a fallback for scores.
 
-To try a production build locally: `NITRO_PRESET=cloudflare_pages npm run build`, then `npx wrangler pages dev dist`.
+To try a production build locally: `NITRO_PRESET=cloudflare_module npm run build`, then `npx wrangler --cwd .output dev`.
 
 ## Status
 

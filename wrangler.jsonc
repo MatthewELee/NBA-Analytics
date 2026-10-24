@@ -1,0 +1,12 @@
+// Cloudflare Worker settings. The build (Nitro) adds `main`, `assets` and the compatibility
+// flags, writes the merged config to .output/server/wrangler.json, and `npx wrangler deploy`
+// picks that up. Bindings must live here: a deploy replaces any set only in the dashboard.
+{
+  "name": "ball-knowledge",
+  "compatibility_flags": ["nodejs_compat"],
+  "hyperdrive": [
+    // Postgres on Neon, pooled by Hyperdrive. server/utils/db.ts reads env.HYPERDRIVE.
+    { "binding": "HYPERDRIVE", "id": "c17d551a9c39472d97d4660f91dbbc68" }
+  ],
+  "observability": { "enabled": true }
+}
