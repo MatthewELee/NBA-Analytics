@@ -75,6 +75,10 @@ def main(argv: list[str] | None = None) -> int:
 
         for name, result in run():
             log.info("%-20s %s", name, result)
+        from .probe import espn_sample
+
+        for line in espn_sample():
+            print(line)
         return 0
 
     settings = Settings.from_env()
