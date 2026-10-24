@@ -89,7 +89,7 @@ An NBA analytics site and portfolio piece. People come here to look up players, 
   - Ledger milestones are computed by our own ingest job, by checking career totals against round-number thresholds and known records.
 - **Storage:** Postgres hosted on Neon or Supabase (free tier). Nuxt server routes read from it and cache responses. On Cloudflare, server routes connect through Hyperdrive with postgres.js, opening one small client per request (`server/utils/db.ts`, closed in `server/plugins/db.ts`).
 - **Ingest:** a Python script in `ingest/`, run on a schedule (GitHub Actions cron or a small worker).
-- **Hosting:** Cloudflare Pages, connected to the repo. Nitro detects the Pages build and uses its `cloudflare-pages` preset (build command `npm run build`, output directory `dist`). The Pages project needs the `nodejs_compat` compatibility flag and a Hyperdrive binding named `HYPERDRIVE` for Postgres. Not Vercel: the old Vercel project linked to the repo can be disconnected.
+- **Hosting:** a Cloudflare Worker (`ball-knowledge`, Workers Builds) connected to the repo. Nitro detects the Workers build and uses its `cloudflare-module` preset (build command `npm run build`, deploy command `npx wrangler deploy`). `wrangler.jsonc` holds the Worker name, the `nodejs_compat` flag and the Hyperdrive binding `HYPERDRIVE`; bindings go there, since each deploy replaces any set only in the dashboard. Not Vercel: the old Vercel project linked to the repo can be disconnected.
 
 ## Conventions
 - Keep design tokens in `assets/styles/tokens.css`. Never hard-code colors or font sizes in components.
