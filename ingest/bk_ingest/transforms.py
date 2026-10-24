@@ -345,6 +345,10 @@ def news_rows(payload: dict, team_ids_by_espn: dict[str, int], player_ids_by_nam
     return out
 
 
+# ESPN's season.type on events and summaries.
+ESPN_SEASON_TYPES = {1: "Pre Season", 2: "Regular Season", 3: "Playoffs", 5: "PlayIn"}
+
+
 def scoreboard_rows(payload: dict, team_ids_by_abbr: dict[str, int], season: str) -> list[dict]:
     """ESPN scoreboard events as game rows. ESPN ids are kept for matching; NBA ids are resolved later."""
     state_map = {"pre": "scheduled", "in": "live", "post": "final"}
@@ -367,6 +371,7 @@ def scoreboard_rows(payload: dict, team_ids_by_abbr: dict[str, int], season: str
             {
                 "espn_id": str(ev["id"]),
                 "season": season,
+                "season_type": ESPN_SEASON_TYPES.get(to_int((ev.get("season") or {}).get("type")), "Regular Season"),
                 "game_date": tipoff.astimezone(EASTERN).date() if tipoff else None,
                 "tipoff": tipoff,
                 "home_team_id": home,
@@ -407,3 +412,98 @@ def bdl_game_rows(games: Iterable[dict], team_ids_by_abbr: dict[str, int], seaso
         )
     return out
 
+
+
+# ---- ESPN box scores ---------------------------------------------------------
+
+# ESPN box score key -> player_games column. "made-attempted" keys fill two columns.
+_ESPN_BOX_KEYS = {
+    "minutes": "min", "points": "pts", "rebounds": "reb", "offensiveRebounds": "oreb",
+    "defensiveRebounds": "dreb", "assists": "ast", "steals": "stl", "blocks": "blk",
+    "turnovers": "tov", "fouls": "pf", "plusMinus": "plus_minus",
+    "fieldGoalsMade-fieldGoalsAttempted": ("fgm", "fga"),
+    "threePointFieldGoalsMade-threePointFieldGoalsAttempted": ("fg3m", "fg3a"),
+    "freeThrowsMade-freeThrowsAttempted": ("ftm", "fta"),
+}
+# Older summaries only carry labels.
+_ESPN_BOX_LABELS = {
+    "MIN": "minutes", "PTS": "points", "REB": "rebounds", "OREB": "offensiveRebounds",
+    "DREB": "defensiveRebounds", "AST": "assists", "STL": "steals", "BLK": "blocks", "TO": "turnovers",
+    "PF": "fouls", "+/-": "plusMinus", "FG": "fieldGoalsMade-fieldGoalsAttempted",
+    "3PT": "threePointFieldGoalsMade-threePointFieldGoalsAttempted", "FT": "freeThrowsMade-freeThrowsAttempted",
+}
+BOX_STAT_COLS = ["min", "pts", "reb", "oreb", "dreb", "ast", "stl", "blk", "tov", "pf",
+                 "fgm", "fga", "fg3m", "fg3a", "ftm", "fta", "plus_minus"]
+
+
+def _box_line(keys: list[str], values: list) -> dict:
+    out: dict = {}
+    for key, raw in zip(keys, values):
+        col = _ESPN_BOX_KEYS.get(key)
+        if isinstance(col, tuple):
+            made, _, att = str(raw).partition("-")
+            out[col[0]], out[col[1]] = to_int(made), to_int(att)
+        elif col == "min":
+            out[col] = to_float(raw)
+        elif col:
+            out[col] = to_int(str(raw).lstrip("+"))
+    return out
+
+
+def espn_box(summary: dict) -> dict:
+    """One ESPN game summary as {'teams': {abbr: side}, 'players': [line, ...]}.
+
+    Team abbreviations are NBA.com's. Players who did not play are left out.
+    """
+    teams: dict[str, dict] = {}
+    comp = ((summary.get("header") or {}).get("competitions") or [{}])[0]
+    for c in comp.get("competitors", []):
+        abbr = nba_abbr((c.get("team") or {}).get("abbreviation") or "")
+        teams[abbr] = {"home_away": c.get("homeAway"), "score": to_int(c.get("score")), "winner": c.get("winner")}
+    players = []
+    for block in (summary.get("boxscore") or {}).get("players", []):
+        abbr = nba_abbr((block.get("team") or {}).get("abbreviation") or "")
+        for st in block.get("statistics") or []:
+            keys = st.get("keys") or [_ESPN_BOX_LABELS.get(lbl, lbl) for lbl in st.get("labels") or []]
+            for a in st.get("athletes") or []:
+                if a.get("didNotPlay") or not a.get("stats"):
+                    continue
+                ath = a.get("athlete") or {}
+                line = _box_line(keys, a["stats"])
+                if not line.get("min") and not any(line.get(c) for c in ("pts", "reb", "ast", "fga", "fta")):
+                    continue  # on the sheet for 0 minutes
+                players.append(
+                    {
+                        "espn_id": str(ath.get("id")),
+                        "name": (ath.get("displayName") or "").strip(),
+                        "jersey": ath.get("jersey") or None,
+                        "position": ((ath.get("position") or {}).get("abbreviation")) or None,
+                        "headshot_url": (ath.get("headshot") or {}).get("href"),
+                        "team_abbr": abbr,
+                        "starter": bool(a.get("starter")),
+                        **{c: line.get(c) for c in BOX_STAT_COLS},
+                    }
+                )
+    return {"teams": teams, "players": players}
+
+
+_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
+
+
+def name_key(name: str) -> str:
+    """Loose key for matching a player across sources: 'Jaren Jackson Jr.' -> 'jaren-jackson'."""
+    parts = [p for p in slugify(name).split("-") if p]
+    while len(parts) > 2 and parts[-1] in _SUFFIXES:
+        parts.pop()
+    return "-".join(parts)
+
+
+# Conference and division for each NBA.com team abbreviation, for when standings never loaded.
+TEAM_GROUPS = {
+    **{a: ("East", "Atlantic") for a in ("BOS", "BKN", "NYK", "PHI", "TOR")},
+    **{a: ("East", "Central") for a in ("CHI", "CLE", "DET", "IND", "MIL")},
+    **{a: ("East", "Southeast") for a in ("ATL", "CHA", "MIA", "ORL", "WAS")},
+    **{a: ("West", "Northwest") for a in ("DEN", "MIN", "OKC", "POR", "UTA")},
+    **{a: ("West", "Pacific") for a in ("GSW", "LAC", "LAL", "PHX", "SAC")},
+    **{a: ("West", "Southwest") for a in ("DAL", "HOU", "MEM", "NOP", "SAS")},
+}

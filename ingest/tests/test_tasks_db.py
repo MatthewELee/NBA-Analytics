@@ -26,7 +26,7 @@ def tasks():
     with conn.cursor() as cur:
         cur.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
     conn.commit()
-    assert migrate(conn) == ["001_init.sql"]
+    assert migrate(conn) == ["001_init.sql", "002_espn_players.sql"]
     assert migrate(conn) == []
     settings = Settings(database_url=URL, nba_api_proxy=None, nba_api_timeout=5, nba_api_delay=0,
                         balldontlie_api_key=None)

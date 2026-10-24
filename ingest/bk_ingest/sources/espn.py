@@ -1,4 +1,4 @@
-"""ESPN's public site API: scoreboard, news and team branding."""
+"""ESPN's public site API: scoreboard, box scores, news and team branding."""
 
 from __future__ import annotations
 
@@ -37,6 +37,10 @@ class Espn:
 
     def scoreboard(self, day: date) -> dict:
         return self._get("scoreboard", dates=day.strftime("%Y%m%d"))
+
+    def summary(self, event_id: str) -> dict:
+        """One game: header, box score, leaders and more."""
+        return self._get("summary", event=event_id)
 
     def news(self, limit: int = 50) -> dict:
         return self._get("news", limit=limit)

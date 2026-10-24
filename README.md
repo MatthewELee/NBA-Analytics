@@ -29,12 +29,34 @@ The repo is connected to a Cloudflare Worker named `ball-knowledge` (Workers Bui
 
 ### Going live with real data
 
-1. Create a free Postgres database (Neon or Supabase) and copy its connection string.
-2. In GitHub, add it as the repository secret `DATABASE_URL` (Settings → Secrets and variables → Actions).
-3. Run the **Ingest** workflow by hand (Actions → Ingest → Run workflow): `backfill` first (every player and every season since 1996-97; it runs the schema migrations too), then `daily`, then `weekly` for awards. After that the schedule keeps it current.
+NBA.com blocks GitHub's servers, so the data comes in two ways. Career history comes from NBA.com, loaded once from your own computer. The current season is kept up to date every night from ESPN, which GitHub can reach.
+
+1. Create a free Postgres database (Neon or Supabase) and add its connection string to GitHub as the repository secret `DATABASE_URL` (Settings → Secrets and variables → Actions).
+2. **Load the history from your computer, once.** You need Python 3.12 and Git. In a terminal:
+
+   ```sh
+   git clone https://github.com/MatthewELee/NBA-Analytics.git
+   cd NBA-Analytics/ingest
+   python -m venv .venv
+   .venv\Scripts\activate            # Windows. On macOS or Linux: source .venv/bin/activate
+   pip install -r requirements.txt
+   $env:DATABASE_URL = "postgresql://..."   # Windows PowerShell. On macOS or Linux: export DATABASE_URL="postgresql://..."
+   python -m bk_ingest migrate
+   python -m bk_ingest history
+   ```
+
+   `history` loads every player NBA.com has, season totals for every season since 1996-97, every active player's awards, and then the Ledger. It takes roughly half an hour and is safe to run again if it stops partway. Add `--first-season 1946-47` to go back to the league's first season. The Ledger then also shows where a player stands on the all-time lists.
+3. **Start the nightly updates.** In GitHub, run the **Ingest** workflow by hand once (Actions → Ingest → Run workflow, command `nightly`). This loads this season's games and box scores so far. After that the schedule takes over: `nightly` at 6:30am ET (scores, schedule, box scores, season totals, standings and the Ledger), `live` every 15 minutes during games, and `hourly` for news.
 4. In Cloudflare, create a Hyperdrive configuration with the same connection string and put its id in `wrangler.jsonc` under the `HYPERDRIVE` binding (already done for the live site).
 
-Stats come from stats.nba.com through `nba_api` (no key). NBA.com sometimes blocks cloud servers, GitHub's runners included: if the stats steps fail with timeouts, set an `NBA_API_PROXY` secret, or run `python -m bk_ingest daily` from your own machine with `DATABASE_URL` set. Scores and news come from ESPN's public API (no key). A `BALLDONTLIE_API_KEY` secret is optional and only used as a fallback for scores.
+**Now and then, from your computer** (same terminal setup, then one command):
+
+- `python -m bk_ingest weekly` picks up new awards, such as Player of the Week, MVP and All-NBA. ESPN doesn't publish these in a form we can read.
+- `python -m bk_ingest daily` replaces the computed standings and season stats with NBA.com's own, with official tiebreakers, PIE and player ratings, and full bios for players new this season.
+
+How the nightly path works: ESPN box scores fill the game logs, and season totals, TS%, eFG%, usage, records, ranks, ratings and pace are computed from them (`ingest/bk_ingest/rollup.py`). ESPN players are matched to NBA.com players by name. Someone NBA.com hasn't been loaded for yet, usually a rookie, gets a placeholder that the next `daily` or `history` run folds into the real player, keeping the same page address. Ranks ignore the NBA's tiebreakers until `daily` runs.
+
+With an `NBA_API_PROXY` secret, the NBA.com commands can run on GitHub as well. A `BALLDONTLIE_API_KEY` secret is optional and only used as a fallback for scores. `python -m bk_ingest probe` reports which sources answer from wherever it runs.
 
 To try a production build locally: `NITRO_PRESET=cloudflare_module npm run build`, then `npx wrangler --cwd .output dev`.
 

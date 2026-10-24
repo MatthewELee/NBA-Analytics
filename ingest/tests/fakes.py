@@ -217,3 +217,72 @@ class FakeEspn:
              "categories": [{"type": "team", "teamId": 2}, {"type": "athlete", "description": "Jalen Okafor-Reyes"}]},
             {"headline": "No link, skipped", "published": "2026-10-22T03:15:00Z"},
         ]}
+
+
+# ---- ESPN box scores, shaped like the summary endpoint ------------------------
+
+BOX_KEYS = ["minutes", "points", "fieldGoalsMade-fieldGoalsAttempted",
+            "threePointFieldGoalsMade-threePointFieldGoalsAttempted", "freeThrowsMade-freeThrowsAttempted",
+            "rebounds", "assists", "turnovers", "steals", "blocks", "offensiveRebounds", "defensiveRebounds",
+            "fouls", "plusMinus"]
+
+
+def espn_athlete(espn_id, name, stats, starter=True, dnp=False):
+    return {"athlete": {"id": espn_id, "displayName": name, "jersey": "9", "position": {"abbreviation": "G"},
+                        "headshot": {"href": f"https://a.espncdn.com/i/headshots/nba/players/full/{espn_id}.png"}},
+            "starter": starter, "didNotPlay": dnp, "stats": [] if dnp else stats}
+
+
+def espn_summary(home, away, home_score, away_score, home_lines, away_lines):
+    def block(abbr, lines):
+        return {"team": {"abbreviation": abbr},
+                "statistics": [{"keys": BOX_KEYS, "labels": [], "athletes": lines}]}
+
+    return {
+        "header": {"competitions": [{"competitors": [
+            {"homeAway": "home", "score": str(home_score), "team": {"abbreviation": home}},
+            {"homeAway": "away", "score": str(away_score), "team": {"abbreviation": away}},
+        ]}]},
+        "boxscore": {"players": [block(away, away_lines), block(home, home_lines)]},
+    }
+
+
+def _final(eid, iso, home, away, hs, as_, season_type=2):
+    return {"id": eid, "date": iso, "season": {"year": 2027, "type": season_type},
+            "status": {"type": {"state": "post", "name": "STATUS_FINAL", "shortDetail": "Final", "completed": True}},
+            "competitions": [{"competitors": [espn_competitor("home", home, hs), espn_competitor("away", away, as_)]}]}
+
+
+class FakeEspnNight(FakeEspn):
+    """Two finished games for Boston and one preseason game, plus a scheduled one."""
+
+    SCOREBOARDS = {
+        date(2026, 10, 10): [_final("401700001", "2026-10-10T23:30Z", "BOS", "NY", 99, 90, season_type=1)],
+        date(2026, 10, 21): [_final("401800010", "2026-10-21T23:30Z", "BOS", "NY", 120, 110)],
+        date(2026, 10, 23): [_final("401800020", "2026-10-23T23:30Z", "GS", "BOS", 101, 104)],
+        date(2026, 10, 27): [{"id": "401800030", "date": "2026-10-27T23:30Z", "season": {"year": 2027, "type": 2},
+                              "status": {"type": {"state": "pre", "name": "STATUS_SCHEDULED", "shortDetail": "7:30 PM"}},
+                              "competitions": [{"competitors": [espn_competitor("home", "NY", 0),
+                                                                espn_competitor("away", "GS", 0)]}]}],
+    }
+
+    def __init__(self):
+        self.summaries_fetched: list[str] = []
+
+    def scoreboard(self, day: date):
+        return {"events": self.SCOREBOARDS.get(day, [])}
+
+    def summary(self, event_id: str):
+        self.summaries_fetched.append(event_id)
+        jalen = lambda pts, pm: espn_athlete("3900001", "Jalen Okafor-Reyes",  # noqa: E731
+                                             ["36", str(pts), "12-20", "4-8", "6-7", "6", "7", "3", "2", "0", "1", "5", "2", pm])
+        rookie = espn_athlete("5100001", "Theo Marchetti Jr.", ["22", "11", "4-9", "1-3", "2-2", "4", "2", "1", "1", "1", "1", "3", "3", "+6"],
+                              starter=False)
+        bench = espn_athlete("3900099", "Sat Out", [], dnp=True)
+        if event_id == "401800010":
+            mats = espn_athlete("3900002", "Mats Lindqvist", ["34", "22", "9-17", "0-1", "4-5", "11", "2", "2", "0", "2", "3", "8", "4", "-10"])
+            return espn_summary("BOS", "NY", 120, 110, [jalen(34, "+10"), rookie, bench], [mats])
+        if event_id == "401800020":
+            dorian = espn_athlete("3900003", "Dorian Baptiste", ["38", "30", "11-22", "5-11", "3-3", "5", "6", "4", "1", "0", "0", "5", "2", "-3"])
+            return espn_summary("GS", "BOS", 101, 104, [dorian], [jalen(29, "+3"), rookie])
+        raise AssertionError(f"no box score for {event_id}")

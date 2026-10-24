@@ -102,3 +102,21 @@ def fakes_static():
     from nba_api.stats.static import teams
 
     return teams.get_teams()
+
+
+def test_espn_box_parses_lines_and_skips_dnp():
+    box = t.espn_box(fakes.FakeEspnNight().summary("401800010"))
+    assert box["teams"] == {"BOS": {"home_away": "home", "score": 120, "winner": None},
+                            "NYK": {"home_away": "away", "score": 110, "winner": None}}
+    names = [p["name"] for p in box["players"]]
+    assert names == ["Mats Lindqvist", "Jalen Okafor-Reyes", "Theo Marchetti Jr."]
+    jalen = box["players"][1]
+    assert (jalen["team_abbr"], jalen["min"], jalen["fgm"], jalen["fga"], jalen["plus_minus"]) == ("BOS", 36.0, 12, 20, 10)
+    assert box["players"][0]["plus_minus"] == -10
+
+
+def test_name_key_drops_suffixes():
+    assert t.name_key("Jaren Jackson Jr.") == "jaren-jackson"
+    assert t.name_key("Gary Payton II") == "gary-payton"
+    assert t.name_key("Nikola Jokić") == "nikola-jokic"
+    assert t.name_key("Larry Nance Jr") == t.name_key("Larry Nance")

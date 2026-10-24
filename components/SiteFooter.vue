@@ -3,7 +3,7 @@
     <hr class="rule rule--double" />
     <div class="footer__row">
       <p class="kicker">Baller Knowledge</p>
-      <p class="label">Stats: NBA.com via nba_api, balldontlie. News and awards: ESPN.</p>
+      <p class="label">Stats: NBA.com via nba_api, and ESPN box scores. Awards: NBA.com. News: ESPN.</p>
       <p class="label">Not affiliated with the NBA.</p>
     </div>
   </footer>

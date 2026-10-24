@@ -13,11 +13,15 @@ from .tasks import Tasks
 
 log = logging.getLogger("bk_ingest")
 
-# Groups the scheduler runs. Each step runs even if an earlier one failed.
+# Groups of steps. Each step runs even if an earlier one failed.
+# GitHub runs nightly, live and hourly, which only use ESPN. NBA.com blocks GitHub, so history,
+# daily and weekly (NBA.com) are run from a home machine.
 GROUPS = {
-    "daily": ["teams", "players", "standings", "player-stats", "gamelogs", "schedule", "ledger"],
+    "nightly": ["teams", "espn-schedule", "boxscores", "rollup", "ledger"],
     "live": ["scoreboard"],
     "hourly": ["news", "scoreboard"],
+    "history": ["teams", "backfill", "awards", "ledger"],
+    "daily": ["teams", "players", "standings", "player-stats", "gamelogs", "schedule", "ledger"],
     "weekly": ["awards", "ledger"],
 }
 
@@ -40,6 +44,12 @@ def run_step(tasks: Tasks, step: str, args) -> None:
         tasks.scoreboard(date.fromisoformat(args.date) if args.date else None)
     elif step == "news":
         tasks.news()
+    elif step == "espn-schedule":
+        tasks.espn_schedule(season)
+    elif step == "boxscores":
+        tasks.boxscores(season)
+    elif step == "rollup":
+        tasks.rollup(season)
     elif step == "ledger":
         tasks.ledger(season)
     elif step == "awards":
@@ -75,10 +85,6 @@ def main(argv: list[str] | None = None) -> int:
 
         for name, result in run():
             log.info("%-20s %s", name, result)
-        from .probe import espn_sample
-
-        for line in espn_sample():
-            print(line)
         return 0
 
     settings = Settings.from_env()

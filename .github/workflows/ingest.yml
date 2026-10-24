@@ -1,21 +1,21 @@
 name: Ingest
 
-# Pulls NBA data into Postgres. Needs the DATABASE_URL repository secret.
-# Optional secrets: NBA_API_PROXY (stats.nba.com often blocks GitHub's runners),
-# BALLDONTLIE_API_KEY (fallback for games when stats.nba.com is unreachable).
+# Keeps the current season up to date in Postgres from ESPN. Needs the DATABASE_URL secret.
+# stats.nba.com blocks GitHub's runners, so career history (`history`) and NBA.com-only data
+# (`daily`, `weekly` for awards) are run from a home machine; see the README. With an
+# NBA_API_PROXY secret they can run here by hand too. BALLDONTLIE_API_KEY is an optional fallback.
 
 on:
   schedule:
     - cron: "*/15 0-6,23 * * *" # live: scores every 15 min during game hours (7pm-3am ET)
     - cron: "5 * * * *"         # hourly: news and scores
-    - cron: "30 10 * * *"       # daily: teams, players, standings, season stats, game logs, schedule
-    - cron: "0 12 * * 1"        # weekly: awards
+    - cron: "30 10 * * *"       # nightly: ESPN schedule, box scores, season totals, standings, Ledger
   workflow_dispatch:
     inputs:
       command:
-        description: "bk_ingest command (daily, live, hourly, weekly, migrate, backfill, or a single task)"
+        description: "bk_ingest command (nightly, live, hourly, migrate, or a single task)"
         required: true
-        default: daily
+        default: nightly
       args:
         description: "Extra arguments, e.g. --season 2025-26"
         required: false
@@ -49,8 +49,7 @@ jobs:
           case "$SCHEDULE" in
             "*/15 0-6,23 * * *") cmd=live ;;
             "5 * * * *")         cmd=hourly ;;
-            "30 10 * * *")       cmd=daily ;;
-            "0 12 * * 1")        cmd=weekly ;;
+            "30 10 * * *")       cmd=nightly ;;
             *)                   cmd="$INPUT_COMMAND" ;;
           esac
           echo "command=$cmd" >> "$GITHUB_OUTPUT"

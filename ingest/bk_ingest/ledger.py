@@ -47,7 +47,7 @@ SEASON_HIGHS: dict[str, tuple[str, int]] = {
     "fg3m": ("3-pointers", 10),
 }
 
-COMPUTED_SOURCE = "Computed from NBA.com box scores"
+COMPUTED_SOURCE = "Computed from NBA.com and ESPN box scores"
 
 
 def detect(conn: psycopg.Connection, season: str, source: str = COMPUTED_SOURCE,
@@ -120,7 +120,8 @@ def _insert(conn: psycopg.Connection, rows: list[dict]) -> int:
 
 
 def _player_url(pid: int, link_nba: bool) -> str | None:
-    return f"https://www.nba.com/player/{pid}" if link_nba else None
+    # Negative ids are ESPN placeholders with no NBA.com page yet.
+    return f"https://www.nba.com/player/{pid}" if link_nba and pid > 0 else None
 
 
 def _matchup(cur, game_id: str, team_id: int) -> str:

@@ -7,15 +7,16 @@ from datetime import date, timedelta
 
 import psycopg
 
-from . import ledger
+from . import ledger, nightly, rollup
 from . import transforms as t
 from .config import Settings, season_for, season_start_year, today_eastern
+from .transforms import name_key
 from .db import logged_run, upsert
 from .sources import balldontlie, espn, nba
 
 log = logging.getLogger(__name__)
 
-GAME_SIDE_COLS = ["season", "game_date", "tipoff", "home_score", "away_score", "status", "status_detail"]
+GAME_SIDE_COLS = ["season", "season_type", "game_date", "tipoff", "home_score", "away_score", "status", "status_detail"]
 
 
 class Tasks:
@@ -71,7 +72,8 @@ class Tasks:
     def players(self, season: str, historical: bool = False) -> int:
         with logged_run(self.conn, "players", nba.SOURCE, season) as run:
             index = self.nba.player_index(season, historical=historical)
-            existing = self._scalar_map("SELECT id, slug FROM players")
+            existing = self._scalar_map("SELECT id, slug FROM players WHERE id > 0")
+            pairs = self._match_placeholders(index, existing)
             rows = t.player_rows(index, existing)
             team_ids = set(self._scalar_map("SELECT id, true FROM teams"))
             for r in rows:
@@ -82,7 +84,39 @@ class Tasks:
                 if not historical:
                     cur.execute("UPDATE players SET is_active = false WHERE is_active")
             run["rows"] = upsert(self.conn, "players", rows, ["id"])
+            if pairs:
+                log.info("folded %d ESPN placeholder players into NBA.com players",
+                         nightly.merge_placeholders(self.conn, pairs))
             return run["rows"]
+
+    def _match_placeholders(self, index: list[dict], existing: dict[int, str]) -> list[tuple[int, int]]:
+        """Pairs ESPN placeholder players with their NBA.com rows in `index`.
+
+        A real player who is new to the table takes over the placeholder's slug, so links keep
+        working; the placeholder's slug is moved aside first.
+        """
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT id, full_name, slug, team_id FROM players WHERE id < 0")
+            placeholders = cur.fetchall()
+        if not placeholders:
+            return []
+        by_name: dict[str, list[nightly.Candidate]] = {}
+        for p in index:
+            pid = int(p["PERSON_ID"])
+            name = f"{p.get('PLAYER_FIRST_NAME') or ''} {p.get('PLAYER_LAST_NAME') or ''}".strip()
+            by_name.setdefault(name_key(name), []).append(
+                nightly.Candidate(pid, int(p["TEAM_ID"]) if p.get("TEAM_ID") else None, str(p.get("ROSTER_STATUS")) in ("1", "1.0")))
+        pairs = []
+        with self.conn.cursor() as cur:
+            for ph, name, slug, team_id in placeholders:
+                real = nightly.pick(by_name.get(name_key(name), []), team_id)
+                if real is None:
+                    continue
+                pairs.append((ph, real))
+                if real not in existing:
+                    cur.execute("UPDATE players SET slug = slug || '-espn' WHERE id = %s", (ph,))
+                    existing[real] = slug
+        return pairs
 
     # ---- season stats --------------------------------------------------------
 
@@ -122,7 +156,7 @@ class Tasks:
             known = self._known_player_ids()
             pg = [r for r in t.player_game_rows(player_log, season, season_type) if r["player_id"] in known]
             n += upsert(self.conn, "player_games", pg, ["player_id", "game_id"])
-            self._merge_placeholder_games()
+            nightly.merge_games(self.conn)
             run["rows"] = n
             return n
 
@@ -130,7 +164,7 @@ class Tasks:
         with logged_run(self.conn, "schedule", nba.SOURCE, season) as run:
             rows = t.games_from_schedule(self.nba.schedule(season), season)
             run["rows"] = upsert(self.conn, "games", rows, ["id"])
-            self._merge_placeholder_games()
+            nightly.merge_games(self.conn)
             return run["rows"]
 
     def standings(self, season: str) -> int:
@@ -203,29 +237,79 @@ class Tasks:
                     cur.execute(
                         """INSERT INTO games (id, season, season_type, game_date, tipoff, home_team_id, away_team_id,
                                               home_score, away_score, status, status_detail, espn_id)
-                           VALUES (%(id)s, %(season)s, 'Regular Season', %(game_date)s, %(tipoff)s, %(home_team_id)s,
+                           VALUES (%(id)s, %(season)s, %(season_type)s, %(game_date)s, %(tipoff)s, %(home_team_id)s,
                                    %(away_team_id)s, %(home_score)s, %(away_score)s, %(status)s, %(status_detail)s,
                                    %(espn_id)s)""",
-                        {**r, "id": gid},
+                        {"season_type": "Regular Season", **r, "id": gid},
                     )
                 n += 1
         return n
 
-    def _merge_placeholder_games(self) -> None:
-        """Folds ESPN or balldontlie placeholder games into the NBA.com game for the same matchup."""
-        with self.conn.cursor() as cur:
-            cur.execute(
-                """WITH dup AS (
-                     DELETE FROM games p USING games g
-                     WHERE p.id LIKE '%-%' AND g.id NOT LIKE '%-%'
-                       AND p.game_date = g.game_date AND p.home_team_id = g.home_team_id
-                       AND p.away_team_id = g.away_team_id
-                     RETURNING p.espn_id, p.game_date, p.home_team_id, p.away_team_id)
-                   UPDATE games g SET espn_id = COALESCE(g.espn_id, dup.espn_id)
-                   FROM dup
-                   WHERE g.id NOT LIKE '%-%' AND g.game_date = dup.game_date
-                     AND g.home_team_id = dup.home_team_id AND g.away_team_id = dup.away_team_id"""
-            )
+    # ---- nightly, from ESPN -----------------------------------------------------
+
+    def espn_schedule(self, season: str, days_ahead: int = 14) -> int:
+        """Scores and the schedule from ESPN, one request per day.
+
+        Starts two days before the last game that has a box score (or at the start of the
+        season on the first run) and runs `days_ahead` days past today.
+        """
+        with logged_run(self.conn, "schedule", espn.SOURCE, season) as run:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    """SELECT max(g.game_date) FROM games g
+                       WHERE g.season = %s AND EXISTS (SELECT 1 FROM team_games t WHERE t.game_id = g.id)""",
+                    (season,),
+                )
+                last = cur.fetchone()[0]
+            first_day = date(season_start_year(season), 10, 1)
+            start = max(first_day, last - timedelta(days=2)) if last else first_day
+            end = min(today_eastern() + timedelta(days=days_ahead), date(season_start_year(season) + 1, 6, 30))
+            teams = self._scalar_map("SELECT abbr, id FROM teams")
+            n, day = 0, start
+            while day <= end:
+                n += self._apply_scoreboard(t.scoreboard_rows(self.espn.scoreboard(day), teams, season), "espn")
+                day += timedelta(days=1)
+            run["rows"] = n
+            return n
+
+    def boxscores(self, season: str) -> int:
+        """Box scores from ESPN for every finished game of the season that doesn't have one yet."""
+        # Logged as "gamelogs" (and the rollup as "player_stats" and "standings") so pages show
+        # these runs as their "as of", the same as the NBA.com tasks they stand in for.
+        with logged_run(self.conn, "gamelogs", f"{espn.SOURCE} box scores", season) as run:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    """SELECT id, espn_id, season, season_type, game_date FROM games g
+                       WHERE season = %s AND status = 'final' AND espn_id IS NOT NULL
+                         AND season_type IN ('Regular Season', 'Playoffs', 'PlayIn')
+                         AND NOT EXISTS (SELECT 1 FROM team_games t WHERE t.game_id = g.id)
+                       ORDER BY game_date""",
+                    (season,),
+                )
+                cols = [d.name for d in cur.description]
+                todo = [dict(zip(cols, r)) for r in cur.fetchall()]
+            teams = self._scalar_map("SELECT abbr, id FROM teams")
+            n, skipped = 0, 0
+            for game in todo:
+                box = t.espn_box(self.espn.summary(game["espn_id"]))
+                if not box["players"]:
+                    skipped += 1  # ESPN hasn't posted it yet
+                    continue
+                ids = nightly.resolve_players(self.conn, box["players"], teams, season_start_year(season))
+                n += nightly.store_box(self.conn, game, box, teams, ids)
+                self.conn.commit()
+            log.info("box scores: %d games loaded, %d not posted yet", len(todo) - skipped, skipped)
+            run["rows"] = n
+            return n
+
+    def rollup(self, season: str) -> int:
+        """Season totals and standings, recomputed from the game tables."""
+        source = f"Computed from {espn.SOURCE} box scores"
+        with logged_run(self.conn, "player_stats", source, season) as run:
+            run["rows"] = rollup.player_seasons(self.conn, season)
+        with logged_run(self.conn, "standings", source, season) as run2:
+            run2["rows"] = rollup.team_seasons(self.conn, season)
+        return run["rows"] + run2["rows"]
 
     # ---- awards and news -----------------------------------------------------
 
