@@ -5,7 +5,7 @@ import type { ApiResponse, GameSummary, RosterRow, TeamDetail, TeamGamePoint } f
 
 const route = useRoute()
 const abbr = computed(() => String(route.params.abbr).toUpperCase())
-const season = computed(() => (typeof route.query.season === 'string' ? route.query.season : undefined))
+const season = useSeason()
 
 const { data: team, error } = await useFetch<ApiResponse<TeamDetail>>(() => `/api/teams/${abbr.value}`, {
   query: { season },

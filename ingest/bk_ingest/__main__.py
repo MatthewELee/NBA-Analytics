@@ -15,10 +15,10 @@ log = logging.getLogger("bk_ingest")
 
 # Groups the scheduler runs. Each step runs even if an earlier one failed.
 GROUPS = {
-    "daily": ["teams", "players", "standings", "player-stats", "gamelogs", "schedule"],
+    "daily": ["teams", "players", "standings", "player-stats", "gamelogs", "schedule", "ledger"],
     "live": ["scoreboard"],
     "hourly": ["news", "scoreboard"],
-    "weekly": ["awards"],
+    "weekly": ["awards", "ledger"],
 }
 
 
@@ -40,6 +40,8 @@ def run_step(tasks: Tasks, step: str, args) -> None:
         tasks.scoreboard(date.fromisoformat(args.date) if args.date else None)
     elif step == "news":
         tasks.news()
+    elif step == "ledger":
+        tasks.ledger(season)
     elif step == "awards":
         tasks.awards(args.limit)
     elif step == "backfill":

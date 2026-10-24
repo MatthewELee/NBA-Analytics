@@ -3,8 +3,7 @@ import type { ApiResponse, TeamStanding } from '~/types/api'
 
 useHead({ title: 'Teams' })
 
-const route = useRoute()
-const season = computed(() => (typeof route.query.season === 'string' ? route.query.season : undefined))
+const season = useSeason()
 const { data } = await useFetch<ApiResponse<TeamStanding[]>>('/api/teams', { query: { season } })
 
 const conferences = computed(() => {

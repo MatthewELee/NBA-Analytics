@@ -7,6 +7,7 @@ from datetime import date, timedelta
 
 import psycopg
 
+from . import ledger
 from . import transforms as t
 from .config import Settings, season_for, season_start_year, today_eastern
 from .db import logged_run, upsert
@@ -244,6 +245,12 @@ class Tasks:
                     log.info("awards: %d/%d players", i, len(ids))
             run["rows"] = n
             return n
+
+    def ledger(self, season: str) -> int:
+        """Milestones, records and awards for the Ledger, computed from what's already loaded."""
+        with logged_run(self.conn, "ledger", ledger.COMPUTED_SOURCE, season) as run:
+            run["rows"] = ledger.detect(self.conn, season)
+            return run["rows"]
 
     def news(self, limit: int = 50) -> int:
         with logged_run(self.conn, "news", espn.SOURCE) as run:

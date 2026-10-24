@@ -55,14 +55,15 @@ interface Loaded {
   source: string | null
 }
 
+const season = useSeason()
 const { data: players, status } = await useAsyncData(
-  () => `compare:${slugs.value.join(',')}`,
+  () => `compare:${slugs.value.join(',')}:${season.value ?? ''}`,
   async () => {
     const out: Loaded[] = []
     for (const slug of slugs.value) {
       try {
         const [d, c] = await Promise.all([
-          $fetch<ApiResponse<PlayerDetail>>(`/api/players/${slug}`),
+          $fetch<ApiResponse<PlayerDetail>>(`/api/players/${slug}`, { query: { season: season.value } }),
           $fetch<ApiResponse<SeasonLine[]>>(`/api/players/${slug}/career`),
         ])
         out.push({ detail: d.data, career: c.data, asOf: d.meta.asOf, source: d.meta.source })
@@ -72,7 +73,7 @@ const { data: players, status } = await useAsyncData(
     }
     return out
   },
-  { watch: [slugs], default: () => [] as Loaded[] },
+  { watch: [slugs, season], default: () => [] as Loaded[] },
 )
 
 const list = computed(() => players.value ?? [])

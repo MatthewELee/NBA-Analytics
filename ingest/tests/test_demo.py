@@ -23,10 +23,12 @@ def test_seed_is_repeatable():
         assert first == again
         assert first["players"] == 30 * 13
         with conn.cursor() as cur:
-            cur.execute("SELECT count(*) FROM players")
+            cur.execute("SELECT count(*) FROM players WHERE is_active")
             assert cur.fetchone()[0] == first["players"]
             cur.execute("SELECT count(*) FROM games WHERE status = 'final' AND game_date >= %s", (date(2026, 11, 20),))
             assert cur.fetchone()[0] == 0
             cur.execute("SELECT DISTINCT source FROM ingest_runs")
             assert all("Demo" in s for (s,) in cur.fetchall())
+            cur.execute("SELECT DISTINCT kind FROM ledger_items WHERE source_url IS NULL")
+            assert {k for (k,) in cur.fetchall()} == {"milestone", "record", "award"}
         conn.rollback()

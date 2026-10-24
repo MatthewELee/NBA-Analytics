@@ -12,6 +12,7 @@ from datetime import date, datetime, time, timedelta, timezone
 
 import psycopg
 
+from . import ledger
 from . import transforms as t
 from .db import upsert
 from .sources import nba
@@ -29,6 +30,53 @@ LAST = ["Abernathy", "Blackwood", "Castellanos", "Delacroix", "Esterhazy", "Fair
         "Zielinski", "Ashworth", "Brannigan", "Cheswick", "Drummond-Kay", "Eriksen"]
 POSITIONS = ["G", "G", "G-F", "F", "F", "F-C", "C", "G", "F", "G-F", "C", "F", "G"]
 COLORS = ["1d428a", "008348", "ce1141", "552583", "fdb927", "006bb6", "e03a3e", "0e2240", "00788c", "c8102e"]
+
+
+def _retired_marks(conn: psycopg.Connection, rng: random.Random) -> None:
+    """Retired players whose career totals today's stars pass this season, and one big night.
+
+    Gives the demo Ledger some records to show. Every name is still fictional.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """SELECT ps.player_id, sum(ps.pts) FILTER (WHERE ps.season < %(s)s),
+                      (SELECT sum(pts) FROM player_games g WHERE g.player_id = ps.player_id AND g.season = %(s)s)
+               FROM player_seasons ps WHERE ps.team_id = 0 AND ps.player_id < %(retired)s
+               GROUP BY ps.player_id ORDER BY 2 DESC NULLS LAST LIMIT 4""",
+            {"s": SEASON, "retired": FIRST_ID + 5000},
+        )
+        marks = cur.fetchall()
+    retired, seasons = [], []
+    for i, (_, prior, gained) in enumerate(marks):
+        pid = FIRST_ID + 5000 + i
+        first, last = rng.choice(FIRST), rng.choice(LAST)
+        retired.append({
+            "PERSON_ID": pid, "PLAYER_FIRST_NAME": first, "PLAYER_LAST_NAME": last, "PLAYER_SLUG": None,
+            "TEAM_ID": None, "POSITION": "F", "HEIGHT": "6-8", "COUNTRY": "Demo",
+            "FROM_YEAR": 1998, "TO_YEAR": 2012, "ROSTER_STATUS": 0,
+        })
+        target = int(prior) + int(gained or 0) // 2
+        years = list(range(1998, 2013))
+        for j, year in enumerate(years):
+            pts = target // len(years) + (target % len(years) if j == 0 else 0)
+            seasons.append({
+                "player_id": pid, "season": f"{year}-{str(year + 1)[-2:]}", "season_type": "Regular Season",
+                "team_id": 0, "gp": 75, "pts": pts, "reb": rng.randint(250, 700), "ast": rng.randint(120, 500),
+                "stl": rng.randint(40, 120), "blk": rng.randint(10, 90), "fg3m": rng.randint(10, 150),
+            })
+    with conn.cursor() as cur:
+        cur.execute("SELECT id, slug FROM players")
+        existing = dict(cur.fetchall())
+    upsert(conn, "players", t.player_rows(retired, existing), ["id"])
+    upsert(conn, "player_seasons", seasons, ["player_id", "season", "season_type", "team_id"])
+    # One night worth writing about.
+    with conn.cursor() as cur:
+        cur.execute(
+            """UPDATE player_games SET pts = 47, fgm = 17, fga = 29 WHERE (player_id, game_id) = (
+                 SELECT player_id, game_id FROM player_games WHERE season = %s AND player_id = %s
+                 ORDER BY game_date DESC LIMIT 1 OFFSET 2)""",
+            (SEASON, marks[0][0] if marks else 0),
+        )
 
 
 def seed(conn: psycopg.Connection, today: date) -> dict:
@@ -213,13 +261,26 @@ def seed(conn: psycopg.Connection, today: date) -> dict:
             awards.append({"player_id": p, "award": "NBA Most Valuable Player", "season": f"202{i + 2}-2{i + 3}",
                            "team_label": None, "month": None, "week": None, "conference": None,
                            "description": "Award", "source": SOURCE})
+    # Player of the Week, East and West, for each week already played.
+    monday = today - timedelta(days=today.weekday() + 7)
+    for week in range(3):
+        day = monday - timedelta(days=7 * week)
+        for c in ("East", "West"):
+            pool = [p for p in stars if conf[skill[p]["team"]] == c]
+            if pool:
+                awards.append({"player_id": pool[week % len(pool)], "award": "NBA Player of the Week",
+                               "season": SEASON, "team_label": None, "month": None, "week": day.isoformat(),
+                               "conference": c, "description": "Award", "source": SOURCE})
     upsert(conn, "awards", awards, ["player_id", "award", "season", "team_label", "month", "week"])
+    _retired_marks(conn, rng)
+    ledger.detect(conn, SEASON, SOURCE, link_nba=False)
 
     with conn.cursor() as cur:
         cur.executemany(
             "INSERT INTO ingest_runs (task, source, season, finished_at, ok, rows_written) VALUES (%s, %s, %s, now(), true, 0)",
             [(task, SOURCE, SEASON) for task in
-             ("teams", "players", "player_stats", "gamelogs", "schedule", "standings", "awards", "scoreboard")],
+             ("teams", "players", "player_stats", "gamelogs", "schedule", "standings", "awards", "scoreboard",
+              "ledger")],
         )
     conn.commit()
     return {"players": len(players), "seasons": len(seasons), "games": len(games), "awards": len(awards)}

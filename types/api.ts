@@ -184,3 +184,45 @@ export interface LeaderRow {
   value: number
   gp: number
 }
+
+export type LedgerKind = 'record' | 'milestone' | 'award'
+
+export interface LedgerItem {
+  id: number
+  kind: LedgerKind
+  headline: string
+  detail: string | null
+  date: string
+  player: Pick<PlayerRef, 'id' | 'slug' | 'fullName'> | null
+  team: Pick<TeamRef, 'abbr' | 'name'> | null
+  stat: string | null
+  value: number | null
+  source: string
+  sourceUrl: string | null
+}
+
+export interface LedgerPage {
+  items: LedgerItem[]
+  /** Pass as ?before= to get the next page; null on the last page. */
+  next: string | null
+}
+
+export interface SearchResults {
+  players: PlayerRef[]
+  teams: Pick<TeamRef, 'id' | 'abbr' | 'city' | 'name' | 'colorPrimary'>[]
+}
+
+export interface StoryRow {
+  player: Pick<PlayerRef, 'id' | 'slug' | 'fullName'> & { teamAbbr: string | null }
+  value: number
+}
+
+/** The featured stat of the day: one stat, one number, one chart. */
+export interface Story {
+  id: string
+  kicker: string
+  title: string
+  /** What the number counts, for the label under it: "40-point games". */
+  unit: string
+  rows: StoryRow[]
+}

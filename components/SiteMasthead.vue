@@ -7,20 +7,25 @@ const sections = [
   { to: '/styleguide', label: 'Styleguide' },
 ]
 
-const today = useState("bk-today", () => new Intl.DateTimeFormat('en-US', {
+const today = useState('bk-today', () => new Intl.DateTimeFormat('en-US', {
   weekday: 'long',
   month: 'long',
   day: 'numeric',
   year: 'numeric',
+  // League dates run on Eastern time, same as the scoreboard.
+  timeZone: 'America/New_York',
 }).format(new Date()))
 </script>
 
 <template>
   <header class="masthead page">
     <div class="masthead__top">
-      <p class="kicker">{{ today }}</p>
-      <p class="kicker masthead__season">2026–27 Season</p>
-      <EditionToggle />
+      <p class="kicker masthead__date">{{ today }}</p>
+      <div class="masthead__tools">
+        <SeasonSelect />
+        <SiteSearch />
+        <EditionToggle />
+      </div>
     </div>
     <hr class="rule rule--double" />
     <NuxtLink to="/" class="masthead__name display">Baller Knowledge</NuxtLink>
@@ -49,7 +54,12 @@ const today = useState("bk-today", () => new Intl.DateTimeFormat('en-US', {
   padding-bottom: var(--space-3);
 }
 
-.masthead__season {
+.masthead__tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
   margin-inline-start: auto;
 }
 
@@ -84,8 +94,15 @@ const today = useState("bk-today", () => new Intl.DateTimeFormat('en-US', {
 }
 
 @media (max-width: 640px) {
-  .masthead__season {
+  .masthead__date {
     display: none;
+  }
+
+  .masthead__tools {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: var(--space-2);
+    width: 100%;
   }
 
   .masthead__name {
