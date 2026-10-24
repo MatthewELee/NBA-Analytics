@@ -54,7 +54,7 @@ def run_step(tasks: Tasks, step: str, args) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    commands = sorted({*GROUPS, "migrate", "backfill", "bdl-games", "demo", *(s for g in GROUPS.values() for s in g)})
+    commands = sorted({*GROUPS, "migrate", "backfill", "bdl-games", "demo", "probe", *(s for g in GROUPS.values() for s in g)})
     p = argparse.ArgumentParser(prog="bk_ingest", description="Load NBA data into the Baller Knowledge database.")
     p.add_argument("command", choices=commands)
     p.add_argument("--season", default=current_season(), help="NBA season label, e.g. 2026-27 (default: current)")
@@ -70,6 +70,13 @@ def main(argv: list[str] | None = None) -> int:
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    if args.command == "probe":
+        from .probe import run
+
+        for name, result in run():
+            log.info("%-20s %s", name, result)
+        return 0
+
     settings = Settings.from_env()
     conn = connect(settings.database_url)
 
